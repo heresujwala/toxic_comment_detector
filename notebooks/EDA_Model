@@ -1,0 +1,40 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from xgboost import XGBClassifier
+from sklearn.metrics import classification_report
+import shap
+import joblib
+
+# Load dataset
+df = pd.read_csv('data/train.csv')
+df['comment_text'] = df['comment_text'].fillna("")
+
+# Binary target for simplicity (you can use multilabel later)
+df['toxic'] = df['toxic'].astype(int)
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(
+    df['comment_text'], df['toxic'], test_size=0.2, random_state=42)
+
+# TF-IDF Vectorization
+from sklearn.feature_extraction.text import TfidfVectorizer
+tfidf = TfidfVectorizer(max_features=10000, stop_words='english')
+X_train_tfidf = tfidf.fit_transform(X_train)
+X_test_tfidf = tfidf.transform(X_test)
+
+# Train XGBoost model
+model = XGBClassifier(use_label_encoder=False, eval_metric='logloss')
+model.fit(X_train_tfidf, y_train)
+
+# Evaluate
+y_pred = model.predict(X_test_tfidf)
+print(classification_report(y_test, y_pred))
+
+# Save model and vectorizer
+joblib.dump(model, 'app/model.pkl')
+joblib.dump(tfidf, 'app/vectorizer.pkl')
+
+# SHAP explainability
+explainer = shap.Explainer(model)
+shap_values = explainer(X_test_tfidf[:100])
+shap.save('app/shap_explainer.pkl', explainer)
